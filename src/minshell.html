@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <title>raylib web game</title>
+    <title>Vampiric control</title>
 
-    <meta name="title" content="raylib web game">
-    <meta name="description" content="New raylib web videogame, developed using raylib videogames library">
+    <meta name="title" content="job application the game">
+    <meta name="description" content="Game for lame jam 65">
     <meta name="keywords" content="raylib, games, html5, programming, C, C++, library, learn, videogames">
     <meta name="viewport" content="width=device-width">
 
@@ -17,18 +17,18 @@
     <meta property="og:image:type" content="image/png">
     <meta property="og:image" content="https://www.raylib.com/common/raylib_logo.png">
     <meta property="og:image:alt" content="New raylib web videogame, developed using raylib videogames library" />
-    <meta property="og:site_name" content="raylib - example">
+    <meta property="og:site_name" content="">
     <meta property="og:url" content="https://www.raylib.com/games.html">
-    <meta property="og:description" content="New raylib web videogame, developed using raylib videogames library">
+    <meta property="og:description" content="Game for lame jam 65">
 
     <!-- Twitter metatags for sharing -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@raysan5">
     <meta name="twitter:title" content="raylib web game">
     <meta name="twitter:image" content="https://www.raylib.com/common/raylib_logo.png">
-    <meta name="twitter:image:alt" content="New raylib web videogame, developed using raylib videogames library">
+    <meta name="twitter:image:alt" content="Game for lame jam 65">
     <meta name="twitter:url" content="https://www.raylib.com/games.html">
-    <meta name="twitter:description" content="New raylib web videogame, developed using raylib videogames library">
+    <meta name="twitter:description" content="Game for lame jam 65">
 
     <!-- Favicon -->
     <link rel="shortcut icon" href="https://www.raylib.com/favicon.ico">
@@ -39,6 +39,11 @@
           margin: 0px; 
           overflow: hidden; 
           background-color: black;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          width:  100vw;
         }
         canvas.emscripten { 
           border: 0px none; 
@@ -48,6 +53,8 @@
           margin-left: auto;
           margin-right: auto;
           display: block;
+          max-height: 100vh;
+          max-width:  100vw;
         }
     </style>
     <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
@@ -75,6 +82,10 @@
         <p id="output" />
         <script>
             var Module = {
+                onRuntimeInitialized: function() {
+                  // Now Module is ready for cwrap/_exports
+                  startMicMeter();
+                },
                 print: (function() {
                     var element = document.getElementById('output');
                     if (element) element.value = ''; // clear browser cache
@@ -92,6 +103,46 @@
                     return canvas;
                 })()
             };
+
+            function rmsFromTimeDomain(arr) {
+              let sumSq = 0;
+              for (let i = 0; i < arr.length; i++) sumSq += arr[i] * arr[i];
+              return Math.sqrt(sumSq / arr.length);
+            }
+            
+            async function startMicMeter() {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+              const AudioContext = window.AudioContext || window.webkitAudioContext;
+              const audioCtx = new AudioContext();
+            
+              const analyser = audioCtx.createAnalyser();
+              analyser.fftSize = 2048;
+              analyser.smoothingTimeConstant = 0.8;
+            
+              const source = audioCtx.createMediaStreamSource(stream);
+              source.connect(analyser);
+            
+              const buf = new Float32Array(analyser.fftSize);
+            
+              // Hook up to C exported function
+              // Option A: cwrap (convenient + typed)
+              const onLoudness = Module.cwrap('on_loudness', null, ['number']);
+            
+              function tick() {
+                analyser.getFloatTimeDomainData(buf);
+                const rms = rmsFromTimeDomain(buf);       // ~0..1 depending on mic gain
+                const loudness01 = Math.max(0, Math.min(1, rms));
+            
+                onLoudness(loudness01);
+            
+                requestAnimationFrame(tick);
+              }
+            
+              tick();
+            }
+
+
         </script>
         {{{ SCRIPT }}}
     </body>
