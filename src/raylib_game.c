@@ -23,6 +23,7 @@ Microtransactions - you have to buy job upgrades
 #include <emscripten/emscripten.h> // Emscripten library
 #endif
 
+#include <math.h>  // Required for: printf()
 #include <stdio.h>  // Required for: printf()
 #include <stdlib.h> // Required for:
 #include <string.h> // Required for:
@@ -91,6 +92,8 @@ typedef struct sAffinity {
 typedef struct sWorker {
   Affinity affinity;
   JobRef job;
+  Color color;
+  int sprite;
   int bored;
   int bored_limit;
   bool at_work, working;
@@ -113,6 +116,9 @@ typedef struct sWorld {
   Worker workers[3];
   Job jobs[3];
   float capital;
+  int crop_sprite;
+  Color color;
+  char* currency;
 } World;
 
 typedef struct sMultiverse {
@@ -255,6 +261,7 @@ void debug_update();
 // :fMisc
 static void draw_text_default(const char* text, int x, int y, float scale, Color color);
 static Vector2 measure_text_default(const char* text, float scale);
+void sprite_draw( int sprite, int x, int y, Color tint );
 int maylag(int i);
 
 
@@ -309,8 +316,8 @@ void job_wake_up( JobRef* ref );
 
 
 // :fWorker
-WorkerEnum worker_random_prototype();
-Worker worker_random(WorkerEnum prototype);
+int worker_random_prototype();
+Worker worker_random(int prototype);
 float worker_get_affinity(Worker self, JobKind kind);
 void worker_draw(Worker self, int x, int y, bool home_draw);
 void worker_wake_up( WorkerRef* ref );
@@ -319,6 +326,10 @@ void worker_wake_up( WorkerRef* ref );
 World world_init();
 void world_update(WorldRef* ref);
 void world_draw(World self);
+char* world_get_random_name();
+char* world_get_random_currency();
+char* world_current_get_currency();
+int world_current_get_crop();
 
 // :fMultiverse
 void multiverse_init();
@@ -390,10 +401,10 @@ void update_draw_frame(void) {
 
 
      if (button_down.is_down) {
-       credits_camera.target.y += 1.0f;
+       credits_camera.target.y += 10.0f;
      }
      if (button_up.is_down) {// WHAT??? BABA IS YOU???
-       credits_camera.target.y -= 1.0f;
+       credits_camera.target.y -= 10.0f;
      }
      if (button_back.is_down) {
        current_screen = previous_screen;
@@ -459,6 +470,18 @@ void update_draw_frame(void) {
          "Ignore if you don't want to\nuse microphone.\n"
          , 250,250,BLACK);
 
+
+     draw_rectangle_rounded((Rectangle){ 5,10, 395, 100 }, 0.4f, 12, WHITE);
+     draw_triangle((Vector2){320-30,140-30}, (Vector2){320+10,140}, (Vector2){320,140-30}, WHITE);
+     text_draw(
+         "Sorry, player, I haven't\n"
+         "figured a good 4th wall break.\n"
+         "but this counts, right?\n"
+         , 10,10,BLACK);
+
+     sprite_draw(SPRITE_JOB_APPLICATION, 10+300,10+100, WHITE);
+
+
   end_drawing();
     } break;
     case SCREEN_GAMEPLAY: {
@@ -504,8 +527,12 @@ void update_draw_frame(void) {
     clear_background(GRAY);
 
     text_draw( text_format("Score: %.0f", score), 10,110, GREEN  );
-    text_draw( "score is calculated as sold capital/1000000 (million)", 10,210, BLACK);
-    text_draw( "You can send a worker from one world to another.\nSelect a worker, change a world and click on the job.\nIt is possible to get infinite capital this way.", 10,310, BLACK);
+    if (isinf(score)) {
+      text_draw( "You won! Now everyone has to work for you!", 10,210, BLACK);
+    } else {
+      text_draw( "score is calculated as sold capital/1000000 (million)", 10,210, BLACK);
+      text_draw( "You can send a worker from one world to another.\nSelect a worker, change a world and click on the job.\nIt is possible to get infinite capital this way.\n\nTry to get to infinity.", 10,310, BLACK);
+    }
     button_draw(restart_button);
     button_draw(button_credits);
   end_drawing();
@@ -578,7 +605,7 @@ void all_update() {
 
 
   if ( button_pressed(BUTTON_SCREAM) ) {
-    ab_sound_play_parallel( &assets,SOUND_SCREAM );
+    ab_sound_play_parallel( &assets,SOUND_SCREAM, 0.3f);
   }
   if ( button_pressed(BUTTON_ISEKAI) ) {
     multiverse_isekai();
@@ -651,7 +678,14 @@ void all_draw() {
   // :draw
   clear_background(GRAY);
 
-  draw_rectangle(10, 130, 570, 570, WHITE);
+  Color c = multiverse.worlds[ multiverse.current_world ].color;
+  Color dark_c = c;
+  dark_c.r -= 50;
+  dark_c.g -= 50;
+  dark_c.b -= 50;
+  draw_rectangle_gradient_h(0, 0, 720, 720, c, dark_c);
+
+  //draw_rectangle(10, 130, 570, 570, WHITE);
   for (UIButtonEnum i = 0; i < BUTTON_COUNT; ++i) {
     button_draw(buttons[i]);
   }
@@ -714,6 +748,26 @@ void debug_info_draw() {
 
 
 // :iMisc
+void sprite_draw( int sprite, int x, int y, Color tint ) {
+  Texture tex = ab_sprite_get(assets, sprite);
+
+  float max = 0.0f;
+   if ( tex.width > tex.height) {
+     max = tex.width;
+   } else {
+     max = tex.height;
+   }
+
+   float mul = 100.0f / max;
+
+   Rectangle srcrec = (Rectangle){0.0f,0.0f, tex.width, tex.height};
+   Rectangle dstrec = (Rectangle){x,y, mul*(float)tex.width, mul*(float)tex.height};
+
+
+  draw_texture_pro(tex, srcrec, dstrec, (Vector2){0.0f,0.0f} , 0.0f, tint);
+
+
+}
 Color score_to_color(int score) {
   if (score >= 7) {
     return GREEN;
@@ -788,12 +842,12 @@ void input_update(Input *input) {
 
 // :iMusic
 void music_init() {
-  Music music = ab_music_get(assets, MUSIC_SKY_VIBE);
+  Music music = ab_music_get(assets, MUSIC_YOUR_JOB_IS_MY_SMILE);
   set_music_volume(music, 1.0f);
   play_music_stream(music);
 }
 void music_update() {
-  Music music = ab_music_get(assets, MUSIC_SKY_VIBE);
+  Music music = ab_music_get(assets, MUSIC_YOUR_JOB_IS_MY_SMILE);
   update_music_stream(music);
 }
 
@@ -859,7 +913,7 @@ static UIButton ui_button_new(int x, int y, int x_, int y_, const char* text) {
 }
 static UIButton ui_button_white(int x, int y, int x_, int y_, const char* text) {
   UIButton self = ui_button_new(x, y, x_, y_, text);
-  self.back_color = (Color){0xF0,0xF0,0xF0,0xFF};
+  self.back_color = (Color){0xF0,0xF0,0xF0,0xA0};
   self.text_color = BLACK;
 
   return self;
@@ -1040,6 +1094,11 @@ Job job_random(JobKind kind) {
     upgrade_mul    = (float)( get_random_value(2100,2200) ) / 1000.0f ;
   }
 
+#ifdef _DEBUG
+  base_income = 1000.0f;
+  upgrade_mul    = 4.0f;
+#endif
+
   return job_init(base_income, time_mul, upgrade_mul,  kind);
 }
 float job_calc_pay(Job self) {
@@ -1132,8 +1191,8 @@ void job_update(JobRef* ref) {
 
 void job_draw_overview(Job self, int pos_x) {
  // draw_rectangle(10+pos_x*190, 130+190 ,190,190, WHITE);
-  text_draw( text_format("%.0f$/s", job_calc_pay(self) ), 10+pos_x*190, 130+190 ,BLACK);
-  text_draw( text_format("X%.1f cost:\n%.0fK", self.upgrade_mul, self.upgrade_cost/1000.0f ), 10+pos_x*190, 130+190+190+32 ,BLACK);
+  text_draw( text_format("%.0f%s/s", job_calc_pay(self), world_current_get_currency() ), 25+pos_x*190, 130+190 ,BLACK);
+  text_draw( text_format("X%.1f cost:\n%.0fK", self.upgrade_mul, self.upgrade_cost/1000.0f ), 10+pos_x*190, 130+190+190+32+5 ,BLACK);
 
 }
 void job_upgrade(JobRef* ref) {
@@ -1171,7 +1230,7 @@ void job_draw_office(Job self) {
     }
   } else {
     // no one here
-    text_draw( text_format("vacant\nbase pay:\n%.0f$", self.base_income),30 , 350 , BLACK);
+    text_draw( text_format("vacant\nbase pay:\n%.0f%s", self.base_income, world_current_get_currency()),30 , 350 , BLACK);
 
   }
 
@@ -1183,7 +1242,7 @@ void job_draw_farm(Job self) {
   if (w!=NULL) {
     if (w->working) {
 
-      Texture carrot = ab_sprite_get(assets, SPRITE_CARROT);
+      Texture carrot = ab_sprite_get(assets, world_current_get_crop());
       int x = 125+190;
       int y = 350+60;
 
@@ -1203,7 +1262,7 @@ void job_draw_farm(Job self) {
     }
   } else {
     // no one here
-    text_draw( text_format("vacant\nbase pay:\n%.0f$", self.base_income),30+190 , 350 , BLACK);
+    text_draw( text_format("vacant\nbase pay:\n%.0f%s", self.base_income, world_current_get_currency()),30+190 , 350 , BLACK);
   }
 
 
@@ -1217,7 +1276,7 @@ void job_draw_market(Job self) {
   if (w!=NULL) {
     if (w->working) {
 
-      Texture carrot = ab_sprite_get(assets, SPRITE_CARROT);
+      Texture carrot = ab_sprite_get(assets, world_current_get_crop() );
       Texture money  = ab_sprite_get(assets, SPRITE_MONEY);
       int x = 125+190+190;
       int y = 350;
@@ -1237,7 +1296,7 @@ void job_draw_market(Job self) {
     }
   } else {
     // no one here
-    text_draw( text_format("vacant\nbase pay:\n%.0f$", self.base_income),30+190+190 , 350 , BLACK);
+    text_draw( text_format("vacant\nbase pay:\n%.0f%s", self.base_income, world_current_get_currency() ),30+190+190 , 350 , BLACK);
   }
 
 
@@ -1271,14 +1330,21 @@ void job_draw(Job self) {
 
 }
 // :iWorker
-WorkerEnum worker_random_prototype() {
-  return get_random_value(0, WORKER_PROTOTYPE_COUNT);
+int worker_random_prototype() {
+  return get_random_value(SPRITE_DECIPLE, SPRITE_TOWER);
 }
 bool worker_selected_is_in_current() {
   return world_ref_is_same(selected_worker.world , multiverse_get_current_world_ref() );
 }
-Worker worker_random(WorkerEnum prototype) {
+Color worker_random_color() {
+  return (Color){get_random_value(100,255),get_random_value(100,255),get_random_value(100,255),255};
+}
+Worker worker_random(int prototype) {
   Worker self = {0};
+
+  self.color = worker_random_color();
+
+  self.sprite = prototype;
 
   self.affinity.office = random_float01();
   self.affinity.farm   = random_float01();
@@ -1301,7 +1367,7 @@ float worker_get_affinity(Worker self, JobKind kind) {
   switch (kind) {
     case JOB_OFFICE: return self.affinity.office;
     case JOB_FARM: return self.affinity.farm;
-    case JOB_MARKET: return self.affinity.farm;
+    case JOB_MARKET: return self.affinity.market;
   }
   return 0.0f; //?
 }
@@ -1343,7 +1409,7 @@ void worker_draw(Worker self, int x, int y, bool home_draw) {
     sleeping = !self.working;
   }
 
-  draw_rectangle(x,y,100,100, RED);
+  sprite_draw( self.sprite, x, y, self.color);
 
   if (home_draw) {
      int score_office = (int)((self.affinity.office)*10.0f);
@@ -1362,20 +1428,14 @@ void worker_draw(Worker self, int x, int y, bool home_draw) {
   } else {
     text_draw( text_format("sleeps in %d", self.bored_limit/TIME_SECOND),x-30,y-32-8, BLACK);
   }
-
-
   } else {
     if (sleeping) {
-      text_draw("Zzz...",x,y, BLACK);
+      text_draw("Zzz...",x,y+100, BLACK);
     } else {
       int seconds_before_sleep = (self.bored_limit - self.bored)/TIME_SECOND;
       text_draw( text_format("sleep in: %d", seconds_before_sleep),x,y+100, BLACK);
-
     }
   }
-
-
-
 }
 
 
@@ -1398,7 +1458,11 @@ World world_init() {
 
   self.capital = 100.0f;
 
-  self.name = "Name";
+  self.crop_sprite = get_random_value(SPRITE_CARROT, SPRITE_WATAMELON);
+
+  self.name = world_get_random_name();
+  self.currency = world_get_random_currency();
+  self.color = worker_random_color();
 
   return self;
 }
@@ -1423,10 +1487,11 @@ void world_update(WorldRef* ref) {
 }
 void world_draw(World self) {
 
+
   //draw_rectangle_rounded((Rectangle){10,130,570,570}, 0.05f, 12, WHITE);
   //draw_rectangle_rounded((Rectangle){10,130,190,190}, 0.05f, 12, BLACK);
   text_draw( text_format("world %d: %s", self.id, self.name ) , 10,70, BLACK);
-  text_draw(text_format("capital:%.0f$", self.capital), 10,95, BLACK);
+  text_draw( text_format("capital:%.0f%s", self.capital, self.currency), 10,95, BLACK);
 
   job_draw(self.jobs[0]);
   job_draw(self.jobs[1]);
@@ -1444,6 +1509,73 @@ void world_draw(World self) {
 
 
 }
+char* world_current_get_currency() {
+  return multiverse.worlds[multiverse.current_world].currency;
+}
+int world_current_get_crop() {
+  return multiverse.worlds[multiverse.current_world].crop_sprite;
+}
+
+char* world_get_random_currency() {
+  int r = get_random_value(0,24);
+  switch (r) {
+    case 0: return "$";
+    case 1: return "#";
+    case 2: return "@";
+    case 3: return "bead";
+    case 4: return "seed";
+    case 5: return "mead";
+    case 6: return "git";
+    case 7: return "deed";
+    case 8: return "cleat";
+    case 9: return "fir";
+    case 10: return "rupir";
+    case 11: return "tu";
+    case 12: return "mu";
+    case 13: return "qe";
+    case 14: return "qo";
+    case 15: return "qvi";
+    case 16: return "ve";
+    case 17: return "va";
+    case 18: return "vok";
+    case 19: return "pok";
+    case 20: return "mok";
+    case 21: return "am";
+    case 22: return "om";
+    case 23: return "chu";
+    case 24: return "chi";
+    default: return "po";
+  }
+}
+char* world_get_random_name() {
+  int r = get_random_value(0,23);
+  switch (r) {
+    case 0: return "Terra";
+    case 1: return "Void";
+    case 2: return "Eridani";
+    case 3: return "Asphodene";
+    case 4: return "Mega Hrushovka";
+    case 5: return "Bizarre";
+    case 6: return "Keid";
+    case 7: return "Zeppelin";
+    case 8: return "Zembretta";
+    case 9: return "Zembretta";
+    case 10: return "Yannyan";
+    case 11: return "Viriato";
+    case 12: return "Talas";
+    case 13: return "Su";
+    case 14: return "Santamasa";
+    case 15: return "Pirx";
+    case 16: return "Neri";
+    case 17: return "Jebus";
+    case 18: return "Ditso";
+    case 19: return "Buru";
+    case 20: return "Zir";
+    case 21: return "AEgir";
+    case 22: return "WISPIT 2 c";
+    default: return "Boring";
+  }
+}
 
 
 // :iMultiverse
@@ -1459,8 +1591,12 @@ void multiverse_init() {
 
 }
 void multiverse_isekai() {
-  multiverse.current_world = multiverse.world_count;
-  multiverse.worlds[multiverse.world_count++] = world_init();
+  if (multiverse.world_count<MAX_WORLDS) {
+    multiverse.current_world = multiverse.world_count;
+    multiverse.worlds[multiverse.world_count++] = world_init();
+  } else {
+    nuh_uh();
+  }
 
 }
 void multiverse_isekai_next() {
@@ -1525,7 +1661,6 @@ void draw_info( AssetInfo self, int pos ) {
   text_draw( text_format("(%s)", self.license_link), 0, posy+32+32+32+32, BLACK );
 }
 void ab_draw_all(AssetBank assets) {
-  
   int pos = 0;
   for (EnumFont i = 0; i < FONT_COUNT; ++i) {
     draw_info( assets.fonts[i].info, pos++ );
@@ -1544,5 +1679,6 @@ void ab_draw_all(AssetBank assets) {
 
 void nuh_uh() {
   // nuh - uh
+  ab_sound_play_parallel( &assets,SOUND_NUH_UH, 1.0f);
 }
 

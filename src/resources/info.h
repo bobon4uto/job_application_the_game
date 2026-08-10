@@ -40,18 +40,43 @@ typedef enum {
 } EnumFont;
 
 typedef enum {
-  MUSIC_SKY_VIBE,
+  MUSIC_YOUR_JOB_IS_MY_SMILE,
   MUSIC_COUNT,
 } EnumMusic;
 
 typedef enum {
   SPRITE_CARROT,
+  SPRITE_CORN,
+  SPRITE_HATSUNE_MIKU,
+  SPRITE_HREN,
+  SPRITE_PEPPER,
+  SPRITE_POTATO,
+  SPRITE_PUMPKIN,
+  SPRITE_REDIS,
+  SPRITE_WATAMELON,
+
   SPRITE_MONEY,
+
+  SPRITE_DECIPLE,
+  SPRITE_JOB_APPLICATION,
+  SPRITE_EYE_CRITTER,
+  SPRITE_FERNANDO_IS_THIS_YOU,
+  SPRITE_BIRB,
+  SPRITE_CAT,
+  SPRITE_SLIME,
+  SPRITE_SWORD,
+  SPRITE_PLANET,
+  SPRITE_RABBIT,
+  SPRITE_MONSTA,
+  SPRITE_TURTLE,
+  SPRITE_TOWER,
+
   SPRITE_COUNT,
 } EnumSprite;
 
 typedef enum {
   SOUND_SCREAM,
+  SOUND_NUH_UH,
   SOUND_COUNT,
 } EnumSound;
 
@@ -83,7 +108,7 @@ Music ab_music_get(AssetBank assets, EnumMusic id);
 
 void ab_sound_load(AssetBank* assets, EnumSound id);
 Sound ab_sound_get(AssetBank assets, EnumSound id);
-void ab_sound_play_parallel(AssetBank* assets, EnumSound id);
+void ab_sound_play_parallel(AssetBank* assets, EnumSound id, float volume);
 
 
 void ab_sprite_load(AssetBank* assets, EnumSprite id);
@@ -106,16 +131,17 @@ AssetBank ab_init() {
   }
 
   // musics
-  #include "resources/musics/sky_vibe_high_frequency/info.h"
+  #include "musics/your_job_is_my_smile/info.h"
 
   for (EnumMusic i = 0; i < MUSIC_COUNT; ++i) {
     ab_music_load(&assets, i);
     assets.music_volumes[i] = 1.0f;
   }
-  assets.music_volumes[MUSIC_SKY_VIBE] = 0.4f;
+  assets.music_volumes[MUSIC_YOUR_JOB_IS_MY_SMILE] = 1.0f;
 
   // sounds
   #include "sounds/canonical_job_application_scream/info.h"
+  #include "sounds/nuh_uh/info.h"
   for (EnumSound i = 0; i < SOUND_COUNT; ++i) {
     ab_sound_load(&assets, i);
   }
@@ -123,6 +149,7 @@ AssetBank ab_init() {
   // sprites
   #include "resources/sprites/crops/info.h"
   #include "resources/sprites/money/info.h"
+  #include "resources/sprites/workers/info.h"
   for (EnumSprite i = 0; i < SPRITE_COUNT; ++i) {
     ab_sprite_load(&assets, i);
   }
@@ -156,12 +183,14 @@ void ab_sound_load(AssetBank* assets, EnumSound id) {
 Sound ab_sound_get(AssetBank assets, EnumSound id) {
   return assets.sounds[id].item;
 }
-void ab_sound_play_parallel(AssetBank* assets, EnumSound id) {
+void ab_sound_play_parallel(AssetBank* assets, EnumSound id, float volume) {
+
   int count  = assets->sound_alias_count[id];
   if (count >= MAX_SOUND_ALIASES) {
     assets->sound_alias_count[id] = 0;
     count = 0;
   }
+  set_sound_volume( assets->sound_alias_array[id][count] , volume);
   play_sound( assets->sound_alias_array[id][count] );
   assets->sound_alias_count[id] = count+1;
 }
