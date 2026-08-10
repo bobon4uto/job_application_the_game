@@ -1061,7 +1061,7 @@ Job* job_ref_get(JobRef* ref) {
 World* world_ref_get(WorldRef* ref) {
   world_ref_fix(ref);
   if (ref->id != REF_INACTIVE) {
-    return &multiverse.worlds[ref->id];
+    return &multiverse.worlds[ref->index_hint];
   }
   return NULL;
 }
