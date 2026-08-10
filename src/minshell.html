@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <title>Vampiric control</title>
+    <title>Job application</title>
 
     <meta name="title" content="job application the game">
     <meta name="description" content="Game for lame jam 65">
@@ -125,16 +125,12 @@
             
               const buf = new Float32Array(analyser.fftSize);
             
-              // Hook up to C exported function
-              // Option A: cwrap (convenient + typed)
-              const onLoudness = Module.cwrap('on_loudness', null, ['number']);
-            
               function tick() {
                 analyser.getFloatTimeDomainData(buf);
-                const rms = rmsFromTimeDomain(buf);       // ~0..1 depending on mic gain
+                const rms = rmsFromTimeDomain(buf);
                 const loudness01 = Math.max(0, Math.min(1, rms));
             
-                onLoudness(loudness01);
+                Module._on_loudness(loudness01);
             
                 requestAnimationFrame(tick);
               }
