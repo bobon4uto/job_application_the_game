@@ -1,17 +1,18 @@
 /*
-See The Future - you can see when workers will slack off
+//See The Future - you can see when workers will slack off
 
-Isekai - isekai to other worlds to give jobs
+// Isekai - isekai to other worlds to give jobs
 
-Fourth Wall Break XXX
+// Fourth Wall Break jobapplication talks to you?
 
-Poor Performance - lag simulation
+// Poor Performance - lag simulation
 
-Don't Look Away! - workers slack off when you arent looking
+// Don't Look Away! - workers slack off when you arent looking
 
-Speak up! - you gotta yell at the workers
+// Speak up! - you gotta yell at the workers
 
-Microtransactions - you have to buy job upgrades
+// Microtransactions - you have to buy job upgrades
+
 */
 #include "raylib.h"
 #include "raymath_snake_case.h"
@@ -368,6 +369,9 @@ int main(void) {
   target = LoadRenderTexture(screen_x_, screen_y_);
   set_texture_filter(target.texture, TEXTURE_FILTER_BILINEAR);
   music_init();
+
+
+  //ab_print_all(assets);
 
 #if defined(PLATFORM_WEB)
   emscripten_set_main_loop(update_draw_frame, 60, 1);
@@ -960,6 +964,15 @@ void rage_meter_update(RageMeter* self) {
   }
   if ( button_pressed(BUTTON_SCREAM) ) {
     self->meter = 1.0f;
+  }
+  if (self->meter < loudness) {
+    if (loudness>1.0f){
+      self->meter = 1.0f;
+    } else{
+      self->meter = loudness;
+    }
+  }
+  if (self->meter>0.5f) {
     WorldRef wref = multiverse_get_current_world_ref();
     JobRef jref = (JobRef){wref, 0};
     jref.i = 0;
@@ -968,13 +981,6 @@ void rage_meter_update(RageMeter* self) {
     job_wake_up( &jref );
     jref.i = 2;
     job_wake_up( &jref );
-  }
-  if (self->meter < loudness) {
-    if (loudness>1.0f){
-      self->meter = 1.0f;
-    } else{
-      self->meter = loudness;
-    }
   }
 }
 void rage_meter_draw(RageMeter self) {

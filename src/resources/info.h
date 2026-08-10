@@ -220,6 +220,33 @@ Texture ab_sprite_get(AssetBank assets, EnumSprite id) {
 }
 
 
+#include <stdio.h>
+void print_info( AssetInfo self, int pos ) {
+#define BANNER_SIZE_ 32*5
+  printf ("%s\n", self.title);
+  printf ("by %s\n", self.author);
+  printf ("Link: %s\n", self.link);
+  printf ("License: %s\n", self.license);
+  printf ("(%s)\n", self.license_link);
+}
+void ab_print_all(AssetBank assets) {
+  int pos = 0;
+  for (EnumFont i = 0; i < FONT_COUNT; ++i) {
+    print_info( assets.fonts[i].info, pos++ );
+  }
+  for (EnumMusic i = 0; i < MUSIC_COUNT; ++i) {
+    print_info( assets.musics[i].info, pos++ );
+  }
+  for (EnumSound i = 0; i < SOUND_COUNT; ++i) {
+    print_info( assets.sounds[i].info, pos++ );
+  }
+  for (EnumSprite i = 0; i < SPRITE_COUNT; ++i) {
+    print_info( assets.sprites[i].info, pos++ );
+  }
+}
+
+
+
 #endif   // INFO_IMPLEMENTATION
 #endif   //_INFO_H_
 
