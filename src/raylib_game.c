@@ -359,7 +359,7 @@ int main(void) {
   music_init();
 
 #if defined(PLATFORM_WEB)
-  emscripten_set_main_loop(update_draw_frame, 10, 1);
+  emscripten_set_main_loop(update_draw_frame, 60, 1);
 #else
   set_target_f_p_s(60);
 
@@ -445,8 +445,8 @@ void update_draw_frame(void) {
      button_draw(button_calibrate_down);
      button_draw(button_credits);
      button_draw(button_start);
-
-     int offset = (int)(loudness*720.0f);
+     float loudness_correct = loudness > 1.0f ? 1.0f : loudness;
+     int offset = (int)((loudness_correct  )*720.0f);
      draw_rectangle(620,0,100,720, WHITE);
      draw_rectangle(620,720-offset,100,offset, RED);
      draw_rectangle(620,360,100,10, BLACK);
@@ -916,7 +916,11 @@ void rage_meter_update(RageMeter* self) {
     job_wake_up( &jref );
   }
   if (self->meter < loudness) {
-    self->meter = loudness;
+    if (loudness>1.0f){
+      self->meter = 1.0f;
+    } else{
+      self->meter = loudness;
+    }
   }
 }
 void rage_meter_draw(RageMeter self) {
